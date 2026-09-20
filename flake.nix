@@ -27,6 +27,7 @@
         default = pkgs.mkShell {
           packages = with pkgs; [
             terraform
+            libisoburn
             packer
           ];
 
