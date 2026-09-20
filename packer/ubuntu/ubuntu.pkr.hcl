@@ -7,85 +7,39 @@ packer {
   }
 }
 
-variable "ssh_public_key_path" {
-  type = string
-}
-
-variable "ssh_private_key_path" {
-  type = string
-}
-
-variable "password_hash" {
-  type      = string
-  sensitive = true
-}
-
 variable "ubuntu_image_url" {
   type    = string
-  default = "https://releases.ubuntu.com/24.04.5/ubuntu-24.04.5-live-server-amd64.iso"
+  default = "https://cloud-images.ubuntu.com/resolute/current/resolute-server-cloudimg-amd64.img"
 }
 
 variable "ubuntu_image_checksum" {
   type    = string
-  default = "file:https://releases.ubuntu.com/24.04.5/SHA256SUMS"
+  default = "file:https://cloud-images.ubuntu.com/resolute/current/SHA256SUMS"
 }
 
 source "qemu" "ubuntu" {
   iso_url      = var.ubuntu_image_url
   iso_checksum = var.ubuntu_image_checksum
+  disk_size    = "20G"
+  disk_image   = true
 
-  vm_name          = "ubuntu-24.04-base.qcow2"
+  vm_name = "ubuntu-resolute-base.qcow2"
 
-  accelerator = "kvm"
-  headless    = true
-
-  disk_size      = "20G"
+  accelerator    = "kvm"
+  cpus           = 2
+  memory         = 2048
+  format         = "qcow2"
   disk_interface = "virtio"
-  disk_image     = false
+  net_device     = "virtio-net"
+  headless       = true
 
-  format = "qcow2"
+  cd_files = ["cloud-init/user-data", "cloud-init/meta-data"]
+  cd_label = "cidata"
 
-  cpus   = 2
-  memory = 2048
-
-  net_device = "virtio-net"
-
-  ssh_username         = "packer"
-  ssh_private_key_file = var.ssh_private_key_path
-  ssh_timeout          = "10m"
-
+  ssh_username              = "packer"
+  ssh_password              = "packer"
+  ssh_timeout               = "10m"
   ssh_clear_authorized_keys = true
-
-  http_content = {
-    "/meta-data" = <<-EOF
-      instance-id: packer-ubuntu-2404
-      local-hostname: ubuntu-template
-    EOF
-
-    "/user-data" = templatefile(
-      "${path.root}/http/user-data.tpl",
-      {
-        ssh_public_key = trimspace(
-          file(var.ssh_public_key_path)
-        )
-
-        password_hash = var.password_hash
-      }
-    )
-  }
-
-  boot_wait = "5s"
-
-  boot_command = [
-    "c<wait>",
-    "linux /casper/vmlinuz --- autoinstall ds='nocloud-net;s=http://{{ .HTTPIP }}:{{ .HTTPPort }}/'",
-    "<enter><wait>",
-    "initrd /casper/initrd",
-    "<enter><wait>",
-    "boot",
-    "<enter>"
-  ]
-
 
   shutdown_command = "sudo shutdown -P now"
 }
@@ -97,25 +51,21 @@ build {
 
   provisioner "shell" {
     inline = [
-      "sudo cloud-init status --wait || true",
-
-      "sudo apt update",
-
-      "sudo DEBIAN_FRONTEND=noninteractive apt dist-upgrade -y",
-
+      "sudo cloud-init status --wait",
+      "sudo apt-get update",
+      "sudo DEBIAN_FRONTEND=noninteractive apt-get -y upgrade",
+      "sudo apt-get install -y qemu-guest-agent",
       "sudo systemctl enable qemu-guest-agent",
+    ]
+  }
 
+  provisioner "shell" {
+    inline = [
       "sudo cloud-init clean --logs --seed",
-
       "sudo truncate -s 0 /etc/machine-id",
-
-      "sudo rm -f /var/lib/dbus/machine-id",
-
-      "sudo rm -f /home/packer/.ssh/authorized_keys",
-
-      "sudo rm -f /etc/sudoers.d/90-packer",
-
-      "sudo userdel -r packer || true"
+      "sudo rm -f /etc/ssh/ssh_host_*",
+      "sudo apt-get clean"
     ]
   }
 }
+
