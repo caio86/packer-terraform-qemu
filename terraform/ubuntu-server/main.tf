@@ -158,8 +158,18 @@ resource "libvirt_domain" "vm" {
 
     videos = [
       {
-        driver = {
-          name = "virtio"
+        model = {
+          type = "virtio"
+        }
+      }
+    ]
+
+    consoles = [
+      {
+        type = "pty"
+        target = {
+          type = "serial"
+          port = 0
         }
       }
     ]
